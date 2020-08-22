@@ -1,8 +1,10 @@
 import React from 'react';
 import logo from './logo.svg';
 import './App.css';
+const wasm = import("./native-pogcast/pkg");
 
 function App() {
+  wasm.then(wasm => wasm.greet());
   return (
     <div className="App">
       <header className="App-header">
