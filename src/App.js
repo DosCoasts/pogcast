@@ -1,26 +1,28 @@
-import React from 'react';
-import logo from './logo.svg';
+import React, { useState } from 'react';
 import './App.css';
 const wasm = import("./native-pogcast/pkg");
 
 function App() {
-  wasm.then(wasm => wasm.greet());
+  const [handle, setHandle] = useState();
+  const start = () => {
+    wasm.then(wasm => {
+      setHandle(wasm.beep());
+    });
+  };
+  const stop = () => {
+    handle.free();
+    setHandle(null);
+  };
+  const toggleBeep = () => {
+    if (!handle) {
+      start();
+    } else {
+      stop();
+    }
+  };
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <button onClick={toggleBeep}>{handle ? "Stop" : "Play"}</button>
     </div>
   );
 }
