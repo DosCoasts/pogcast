@@ -3,47 +3,65 @@ import './App.css';
 import ffmpeg from './ffmpeg.js/ffmpeg';
 const rust = import("./native-pogcast/pkg");
 
-const mp3Decoder = async (channel) => {
+const mp3Decoder = async () => {
   const wasm = await ffmpeg();
-  const decoder = new wasm.AVCodecWrapper("mp3");
-  console.log(wasm);
-  decoder.delete();
+  const decoder = new wasm.AVCodecWrapper();
 
-  const decode = async (path) => {
-    const response = await fetch(path);
-    const inBuf = response.arrayBuffer;
-    let data_size = inBuf.byteLength;
-    let decoded_frame = null;
-    while (data_size > 0) {
-      if (!decoded_frame) {
-        //decoded_frame = wasm.av_frame_alloc();
-        if (!decoded_frame) {
-          console.error("Could not allocate audio frame");
-        }
+  const decode = async (url) => {
+    const response = await fetch(url);
+    const reader = response.body.getReader();
+    const contentLength = +response.headers.get('Content-Length');
+    let chunks = [];
+    let receivedLength = 0;
+    while (true) {
+      const {done, value} = await reader.read();
+      console.log(value);
+      if (done) {
+        break;
       }
+      chunks.push(value);
+      receivedLength += value.length;
     }
+    console.log(chunks);
+    console.log(receivedLength);
+    let chunksAll = new Uint8Array(receivedLength);
+    let position = 0;
+    for(let chunk of chunks) {
+      chunksAll.set(chunk, position); // (4.2)
+      position += chunk.length;
+    }
+    console.log(chunksAll);
+    const output = Float32Array.from(decoder.decode(chunksAll));
+    console.log(output);
+    decoder.delete();
+    return output;
+    /*return await fetch(url)
+      .then(response => response.arrayBuffer())
+      .then((buffer) => {
+        const array = new Uint8Array(buffer);
+        const output = Float32Array.from(decoder.decode(array));
+        console.log(output);
+        decoder.delete();
+        return output;
+      });*/
   };
 
   return {
-    decode,
-  };
-
-  return async (path) => {
-    const response = await fetch(path);
-    const arrayBuffer = response.arrayBuffer;
-    return;
+    decode
   };
 };
 
 function App() {
   const [handle, setHandle] = useState();
-  const bc = new BroadcastChannel('music');
-  const decoder = mp3Decoder(bc);
-  //decoder.decode('../music.mp3');
+  const decoder = mp3Decoder();
 
   const start = () => {
     rust.then(wasm => {
-      setHandle(wasm.beep());
+      decoder.then(decoder => {
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        const url = 'https://www.bensound.com/bensound-music/bensound-ukulele.mp3';
+        decoder.decode(proxyUrl + url).then(data => setHandle(wasm.play(data)));
+      });
     });
   };
   const stop = () => {

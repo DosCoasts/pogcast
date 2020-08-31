@@ -1,7 +1,9 @@
 mod utils;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::Stream;
+use cpal::{BufferSize, Data, Sample, SampleRate, SampleFormat, Stream, StreamConfig};
+use js_sys::Float32Array;
+use std::panic;
 use wasm_bindgen::prelude::*;
 use web_sys::console;
 
@@ -15,55 +17,33 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub struct Handle(Stream);
 
 #[wasm_bindgen]
-pub fn beep() -> Handle {
+pub fn play(raw_data: &Float32Array) -> Handle {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+    let v = raw_data.to_vec();
     let host = cpal::default_host();
     let device = host
         .default_output_device()
         .expect("failed to find a default output device");
-    let config = device.default_output_config().unwrap();
-
-    Handle(match config.sample_format() {
-        cpal::SampleFormat::F32 => run::<f32>(&device, &config.into()),
-        cpal::SampleFormat::I16 => run::<i16>(&device, &config.into()),
-        cpal::SampleFormat::U16 => run::<u16>(&device, &config.into()),
-    })
-}
-
-fn run<T>(device: &cpal::Device, config: &cpal::StreamConfig) -> Stream
-where
-    T: cpal::Sample,
-{
-    let sample_rate = config.sample_rate.0 as f32;
-    let channels = config.channels as usize;
-
-    // Produce a sinusoid of maximum amplitude.
-    let mut sample_clock = 0f32;
-    let mut next_value = move || {
-        sample_clock = (sample_clock + 1.0) % sample_rate;
-        ((sample_clock * 440.0 * 2.0 * 3.141592 / sample_rate)).sin() * 0.05
+    let config = StreamConfig {
+        channels: 1,
+        sample_rate: SampleRate(44100),
+        buffer_size: BufferSize::Fixed(v.len() as u32),
     };
+    let mut supported_configs_range = device.supported_output_configs().expect("error while querying configs");
+    for config in supported_configs_range {
+        //console::log_1(&format!("{:?}", config).into());
+    }
 
     let err_fn = |err| console::error_1(&format!("an error occurred on stream: {}", err).into());
+    let write_data_f32 = move |data: &mut Data, _: &cpal::OutputCallbackInfo| write_data(data, &v);
 
-    let stream = device
-        .build_output_stream(
-            config,
-            move |data: &mut [T], _| write_data(data, channels, &mut next_value),
-            err_fn,
-        )
-        .unwrap();
+    let stream = device.build_output_stream_raw(&config.into(), SampleFormat::F32, write_data_f32, err_fn).unwrap();
     stream.play().unwrap();
-    stream
+
+    return Handle(stream);
 }
 
-fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> f32)
-where
-    T: cpal::Sample,
-{
-    for frame in output.chunks_mut(channels) {
-        let value: T = cpal::Sample::from::<f32>(&next_sample());
-        for sample in frame.iter_mut() {
-            *sample = value;
-        }
-    }
+fn write_data(data: &mut Data, raw_data: &[f32]) {
+    data.as_slice_mut().unwrap()[..].clone_from_slice(&raw_data);
+    console::log_1(&format!("{:?}", data).into());
 }
