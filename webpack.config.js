@@ -67,7 +67,8 @@ module.exports = env => ({
         new WasmPackPlugin({ 
             crateDirectory: path.resolve('src/native-pogcast'),
             extraArgs: '--no-typescript',
-            outDir: path.resolve('src/native-pogcast/pkg')
+            outDir: path.resolve('src/native-pogcast/pkg'),
+            forceMode: "production"
         })
     ],
     optimization: {
