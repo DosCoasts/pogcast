@@ -14,7 +14,7 @@ const mp3Decoder = async () => {
                 break;
             }
             const output = Float32Array.from(decoder.decode(value));
-            postMessage(output);
+            postMessage(output.buffer, [output.buffer]);
             receivedLength += value.length;
             if (contentLength)
                 console.log(`${Math.floor((receivedLength/contentLength)*100)}%...`);

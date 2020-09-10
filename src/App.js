@@ -7,10 +7,13 @@ function App() {
     const [handle, setHandle] = useState();
 
     useEffect(() => {
-        workers.decoderWorker.onmessage = ({ data }) =>  {
-            if (handle)
-                rust.then((wasm) => wasm.play(handle, data));
-        };
+        rust.then((wasm) => {
+            workers.decoderWorker.onmessage = ({ data }) =>  {
+                const array = new Float32Array(data);
+                if (handle)
+                    wasm.play(handle, array);
+            };
+        })
     }, [handle]);
 
     const start = () => rust.then((wasm) => {
