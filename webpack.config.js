@@ -57,6 +57,9 @@ module.exports = env => ({
             use: [
                 'file-loader',
             ],
+        }, {
+            test: /\.worker\.js$/,
+            use: { loader: 'worker-loader' },
         }],
     },
     plugins: [
