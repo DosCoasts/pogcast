@@ -47,7 +47,7 @@ const mp3Decoder = async () => {
     };
 
     return {
-        decode
+        decode,
     };
 };
 
