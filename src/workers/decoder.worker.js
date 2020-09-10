@@ -1,4 +1,5 @@
 import ffmpeg from '../ffmpeg.js/ffmpeg';
+
 const mp3Decoder = async () => {
     const wasm = await ffmpeg();
     const decoder = new wasm.AVCodecWrapper();
@@ -14,7 +15,11 @@ const mp3Decoder = async () => {
                 break;
             }
             const output = Float32Array.from(decoder.decode(value));
-            postMessage(output.buffer, [output.buffer]);
+            const CHUNK_SIZE = 1024 * 1024 * 1; // send 1MB at a time
+            for (let i = 0; i < output.length; i += CHUNK_SIZE) {
+                const chunk = new Float32Array(output.slice(i, i + CHUNK_SIZE));
+                postMessage(chunk.buffer, [chunk.buffer]);
+            }
             receivedLength += value.length;
             if (contentLength)
                 console.log(`${Math.floor((receivedLength/contentLength)*100)}%...`);
@@ -27,9 +32,9 @@ const mp3Decoder = async () => {
     };
 };
 
-const decoder = mp3Decoder();
-console.log(decoder);
-onmessage = function({ data }) {
-    console.log(data);
-    decoder.then((decoder) => decoder.decode(data));
-};
+mp3Decoder().then((decoder) => {
+    onmessage = function({ data }) {
+        console.log('DECODING');
+        decoder.decode(data);
+    };
+});

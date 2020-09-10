@@ -13,7 +13,7 @@ function App() {
                 if (handle)
                     wasm.play(handle, array);
             };
-        })
+        });
     }, [handle]);
 
     const start = () => rust.then((wasm) => {
