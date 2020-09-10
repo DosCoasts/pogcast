@@ -35,7 +35,8 @@ module.exports = env => ({
                         // includes whatever babel plugins are required based on browserlist config
                         ['@babel/preset-env', {
                             // imports polyfills in the entry point of the app
-                            useBuiltIns: 'entry'
+                            useBuiltIns: 'entry',
+                            corejs: 3
                         }],
                         '@babel/preset-react',
                     ],
