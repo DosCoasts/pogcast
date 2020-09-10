@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import './App.css';
 import ffmpeg from './ffmpeg.js/ffmpeg';
 const rust = import("./native-pogcast/pkg");
 
-const mp3Decoder = async (channel) => {
+const mp3Decoder = async (play) => {
     const wasm = await ffmpeg();
     const decoder = new wasm.AVCodecWrapper();
 
-    const decode = async (url) => {
+    const decode = async (url, handle) => {
         const response = await fetch(url);
         const reader = response.body.getReader();
         const contentLength = +response.headers.get('Content-Length');
@@ -33,8 +33,8 @@ const mp3Decoder = async (channel) => {
             position += chunk.length;
         }
         const output = Float32Array.from(decoder.decode(chunksAll));
-        console.log(output);
-        channel.postMessage(output);
+        console.log(handle);
+        rust.then((wasm) => wasm.play(handle, output));
     };
 
     return {
@@ -45,24 +45,18 @@ const mp3Decoder = async (channel) => {
 
 function App() {
     const [handle, setHandle] = useState();
-    const decoder = useRef(null);
-    useEffect(() => {
-        const bc = new BroadcastChannel('mp3_chunks');
-        bc.onmessage = ({ data }) => {
-            console.log(data);
-            rust.then((wasm) => wasm.play(data));
-        };
-
-        decoder.current = mp3Decoder(bc);
-    }, []);
+    const decoder = useMemo(() => mp3Decoder(), []);
 
     const start = () => {
-        rust.then((wasm) => setHandle(wasm.start()));
-        decoder.current.then(decoder => {
-            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-            const url = 'https://www.bensound.com/bensound-music/bensound-ukulele.mp3';
-            decoder.decode(proxyUrl + url);
-        });
+        rust.then((wasm) => wasm.start())
+            .then((handle) => {
+                setHandle(handle);
+                decoder.then(decoder => {
+                    const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+                    const url = 'https://www.bensound.com/bensound-music/bensound-ukulele.mp3';
+                    decoder.decode(proxyUrl + url, handle);
+                });
+            });
     };
     const stop = () => {
         handle.free();
