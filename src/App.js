@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import ffmpeg from './ffmpeg.js/ffmpeg';
 const rust = import("./native-pogcast/pkg");
 
-const mp3Decoder = async () => {
+const mp3Decoder = async (channel) => {
     const wasm = await ffmpeg();
     const decoder = new wasm.AVCodecWrapper();
 
@@ -11,73 +11,66 @@ const mp3Decoder = async () => {
         const response = await fetch(url);
         const reader = response.body.getReader();
         const contentLength = +response.headers.get('Content-Length');
-        let chunks = [];
         let receivedLength = 0;
+        let chunks = [];
         while (true) {
             const {done, value} = await reader.read();
-            console.log(value);
             if (done) {
                 break;
             }
             chunks.push(value);
+            // TODO: Implement stream decoding
+            //const output = Float32Array.from(decoder.decode(value));
+            //channel.postMessage(output);
             receivedLength += value.length;
+            if (contentLength)
+                console.log(`${Math.floor((receivedLength/contentLength)*100)}%...`);
         }
-        console.log(chunks);
-        console.log(receivedLength);
-        let chunksAll = new Uint8Array(receivedLength);
+        const chunksAll = new Uint8Array(receivedLength);
         let position = 0;
-        for(let chunk of chunks) {
-            chunksAll.set(chunk, position); // (4.2)
+        for (let chunk of chunks) {
+            chunksAll.set(chunk, position);
             position += chunk.length;
         }
-        console.log(chunksAll);
         const output = Float32Array.from(decoder.decode(chunksAll));
         console.log(output);
-        decoder.delete();
-        return output;
-        /*return await fetch(url)
-            .then(response => response.arrayBuffer())
-            .then((buffer) => {
-                const array = new Uint8Array(buffer);
-                const output = Float32Array.from(decoder.decode(array));
-                console.log(output);
-                decoder.delete();
-                return output;
-            });*/
+        channel.postMessage(output);
     };
 
     return {
         decode,
+        delete: decoder.delete,
     };
 };
 
 function App() {
     const [handle, setHandle] = useState();
-    const decoder = mp3Decoder();
+    const decoder = useRef(null);
+    useEffect(() => {
+        const bc = new BroadcastChannel('mp3_chunks');
+        bc.onmessage = ({ data }) => {
+            console.log(data);
+            rust.then((wasm) => wasm.play(data));
+        };
+
+        decoder.current = mp3Decoder(bc);
+    }, []);
 
     const start = () => {
-        rust.then(wasm => {
-            decoder.then(decoder => {
-                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-                const url = 'https://www.bensound.com/bensound-music/bensound-ukulele.mp3';
-                decoder.decode(proxyUrl + url).then(data => setHandle(wasm.play(data)));
-            });
+        rust.then((wasm) => setHandle(wasm.start()));
+        decoder.current.then(decoder => {
+            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+            const url = 'https://www.bensound.com/bensound-music/bensound-ukulele.mp3';
+            decoder.decode(proxyUrl + url);
         });
     };
     const stop = () => {
         handle.free();
         setHandle(null);
     };
-    const toggleBeep = () => {
-        if (!handle) {
-            start();
-        } else {
-            stop();
-        }
-    };
     return (
         <div className="App">
-            <button onClick={toggleBeep}>{handle ? "Stop" : "Play"}</button>
+            <button onClick={() => handle ? stop() : start()}>{handle ? "Stop" : "Play"}</button>
         </div>
     );
 }
