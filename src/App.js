@@ -3,33 +3,56 @@ import './App.css';
 import workers from './workers/workers';
 const rust = import("./native-pogcast/pkg");
 
+const DEFAULT_OPTIONS = {
+    volume: 50,
+};
+
 function App() {
-    const [handle, setHandle] = useState();
+    const [playing, setPlaying] = useState(false);
+    const [volume, setVolume] = useState(DEFAULT_OPTIONS.volume);
+    const [rustPlayer, setRustPlayer] = useState();
 
     useEffect(() => {
-        rust.then((wasm) => {
-            workers.decoderWorker.onmessage = ({ data }) =>  {
-                const array = new Float32Array(data);
-                if (handle)
-                    wasm.play(handle, array);
-            };
-        });
-    }, [handle]);
+        rust.then((wasm) => setRustPlayer(new wasm.Player(DEFAULT_OPTIONS)));
+        return () => {
+            rustPlayer.free();
+            setRustPlayer(null);
+        };
+    }, []);
 
-    const start = () => rust.then((wasm) => {
-        const handle = wasm.start();
-        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-        const audioUrl = 'https://www.bensound.com/bensound-music/bensound-ukulele.mp3';
-        workers.decoderWorker.postMessage(proxyUrl + audioUrl);
-        setHandle(handle);
-    });
+    useEffect(() => {
+        workers.decoderWorker.onmessage = ({ data }) =>  {
+            const array = new Float32Array(data);
+            rustPlayer.add_data(array);
+        };
+    }, [rustPlayer]);
+
+    const play = () => {
+        const start = () => {
+            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+            const audioUrl = 'https://www.bensound.com/bensound-music/bensound-ukulele.mp3';
+            workers.decoderWorker.postMessage(proxyUrl + audioUrl);
+        };
+        const resume = () => rustPlayer.resume();
+
+        rustPlayer.is_playing() ? resume() : start();
+        setPlaying(true);
+    };
+
     const stop = () => {
-        handle.free();
-        setHandle(null);
+        rustPlayer.pause();
+        setPlaying(false);
+    };
+    const handleVolume = (volume) => {
+        setVolume(volume);
+        rustPlayer.set_volume(volume);
     };
     return (
         <div className="App">
-            <button onClick={() => handle ? stop() : start()}>{handle ? "Stop" : "Play"}</button>
+            <button onClick={() => playing ? stop() : play()}>{playing ? "Stop" : "Play"}</button>
+            <div>
+                <input type="range" min="1" max="100" value={volume} onChange={(e) => handleVolume(e.target.value)} />
+            </div>
         </div>
     );
 }

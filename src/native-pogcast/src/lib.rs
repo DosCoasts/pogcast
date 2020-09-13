@@ -1,10 +1,11 @@
 mod utils;
 
-use rodio::{OutputStream, OutputStreamHandle, Sink};
+use js_sys::{Array, Float32Array, Object};
+use rodio::{OutputStream, Sink};
 use rodio::buffer::SamplesBuffer;
-use js_sys::Float32Array;
-use std::panic;
+use serde::{Serialize, Deserialize};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use web_sys::console;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -13,22 +14,61 @@ use web_sys::console;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-#[wasm_bindgen]
-pub struct Handles(Sink, OutputStreamHandle, OutputStream);
+#[derive(Deserialize, Serialize)]
+struct PlayerOptions {
+    #[serde(default)]
+    volume: u32,
+}
 
-#[wasm_bindgen]
-pub struct SinkHandle(Sink);
-
-#[wasm_bindgen]
-pub fn start() -> Handles {
-    let (stream, stream_handle) = OutputStream::try_default().unwrap();
-    let sink = Sink::try_new(&stream_handle).unwrap();
-    return Handles(sink, stream_handle, stream);
+impl Default for PlayerOptions {
+    fn default() -> Self {
+        Self {
+            volume: 50,
+        }
+    }
 }
 
 #[wasm_bindgen]
-pub fn play(handles: &Handles, raw_data: &Float32Array) {
-    let v = raw_data.to_vec();
-    let buffer = SamplesBuffer::new(1,44100, v);
-    handles.0.append(buffer);
+pub struct Player {
+    sink: Sink,
+    stream: OutputStream,
+    volume: u32,
+}
+
+#[wasm_bindgen]
+impl Player {
+    #[wasm_bindgen(constructor)]
+    pub fn new(player_options: &JsValue) -> Self {
+        let (stream, stream_handle) = OutputStream::try_default().unwrap();
+        let sink = Sink::try_new(&stream_handle).unwrap();
+        let options = player_options.into_serde::<PlayerOptions>().unwrap();
+        sink.set_volume(options.volume as f32 / 100.0);
+        Self {
+            sink: sink,
+            stream: stream,
+            volume: options.volume,
+        }
+    }
+
+    pub fn add_data(&self, raw_data: &Float32Array) {
+        let buffer = SamplesBuffer::new(1,44100, raw_data.to_vec());
+        self.sink.append(buffer);
+    }
+
+    pub fn pause(&self) {
+        self.sink.pause();
+    }
+
+    pub fn resume(&self) {
+        self.sink.play();
+    }
+
+    pub fn is_playing(&self) -> bool {
+        !self.sink.empty()
+    }
+
+    pub fn set_volume(&mut self, volume: u32) {
+        self.volume = volume;
+        self.sink.set_volume(volume as f32 / 100.0);
+    }
 }
