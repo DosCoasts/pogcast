@@ -1,15 +1,12 @@
+#[macro_use]
 mod utils;
 
-use js_sys::{Array, Float32Array, Object};
+use js_sys::Float32Array;
 use rodio::{OutputStream, Sink};
 use rodio::buffer::SamplesBuffer;
 use serde::{Serialize, Deserialize};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use web_sys::console;
 
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -31,7 +28,7 @@ impl Default for PlayerOptions {
 #[wasm_bindgen]
 pub struct Player {
     sink: Sink,
-    stream: OutputStream,
+    _stream: OutputStream,
     volume: u32,
 }
 
@@ -39,13 +36,15 @@ pub struct Player {
 impl Player {
     #[wasm_bindgen(constructor)]
     pub fn new(player_options: &JsValue) -> Self {
+        crate::utils::set_panic_hook();
+
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
         let sink = Sink::try_new(&stream_handle).unwrap();
         let options = player_options.into_serde::<PlayerOptions>().unwrap();
         sink.set_volume(options.volume as f32 / 100.0);
         Self {
             sink: sink,
-            stream: stream,
+            _stream: stream,
             volume: options.volume,
         }
     }
