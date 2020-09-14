@@ -28,7 +28,7 @@ impl Default for PlayerOptions {
 #[wasm_bindgen]
 pub struct Player {
     sink: Sink,
-    _stream: OutputStream,
+    stream: OutputStream,
     volume: u32,
 }
 
@@ -41,12 +41,22 @@ impl Player {
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
         let sink = Sink::try_new(&stream_handle).unwrap();
         let options = player_options.into_serde::<PlayerOptions>().unwrap();
-        sink.set_volume(options.volume as f32 / 100.0);
-        Self {
+        let mut player = Self {
             sink: sink,
-            _stream: stream,
+            stream: stream,
             volume: options.volume,
-        }
+        };
+        player.set_volume(options.volume);
+        player.suspend_stream();
+        player
+    }
+
+    pub fn start_stream(&self) {
+        self.stream.resume().unwrap();
+    }
+
+    pub fn suspend_stream(&self) {
+        self.stream.suspend().unwrap();
     }
 
     pub fn add_data(&self, raw_data: &Float32Array) {
